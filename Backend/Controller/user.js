@@ -7,21 +7,23 @@ const getUsers = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
-    const { name, email, ageMin, ageMax } = req.query;
+    const { search, ageMin, ageMax } = req.query;
 
-    // query for filtering
+    const decodedSearch = search ? decodeURIComponent(search) : '';
+
+    // Query for filtering
     const query = {};
-    if (name) {
-      query.name = { $regex: name, $options: 'i' }; 
-    }
-    if (email) {
-      query.email = { $regex: email, $options: 'i' }; 
+    if (decodedSearch) {
+      query.$or = [
+        { name: { $regex: decodedSearch, $options: 'i' } }, 
+        { email: { $regex: decodedSearch, $options: 'i' } },
+      ];
     }
     if (ageMin) {
-      query.age = { ...query.age, $gt: parseInt(ageMin) }; 
+      query.age = { ...query.age, $gt: parseInt(ageMin) };
     }
     if (ageMax) {
-      query.age = { ...query.age, $lte: parseInt(ageMax) }; 
+      query.age = { ...query.age, $lte: parseInt(ageMax) };
     }
 
     const users = await User.find(query)
@@ -31,8 +33,8 @@ const getUsers = async (req, res) => {
     const total = await User.countDocuments(query);
 
     if (!users || users.length === 0) {
-      return res.status(404).json({
-        status: false,
+      return res.status(200).json({
+        status: true,
         message: 'Users not found',
         data: [],
         totalPages: 0,
@@ -47,29 +49,31 @@ const getUsers = async (req, res) => {
       currentPage: page,
     });
   } catch (error) {
+    console.error('Error fetching users:', error);
     res.status(500).json({ status: false, message: 'Server error', error });
   }
 };
 
 
 
-// post 5000 users
-const postUsers = async (req, res) => {
-  const users = Array.from({ length: 5000 }, (_, i) => ({
-    name: `User ${i + 1}`,
-    email: `user${i + 1}@example.com`,
-    age: Math.floor(Math.random() * (80 - 18 + 1)) + 18,
-  }));
 
+// post 5000 users at once
+const postUsers = async (req, res) => {
   try {
-    await User.deleteMany({});
+    const userCount = await User.countDocuments();
+    
+    const users = Array.from({ length: 5000 }, (_, i) => ({
+      name: `user ${userCount + i + 1}`,
+      email: `user${userCount + i + 1}@example.com`,
+      age: Math.floor(Math.random() * (80 - 18 + 1)) + 18,
+    }));
+
     await User.insertMany(users);
-    res.status(201).json({status : true ,  message: 'Successfully created 5000 users' });
+    res.status(201).json({ status: true, message: 'Successfully created 5000 users' });
   } catch (error) {
     res.status(500).json({ message: 'Error seeding users', error });
   }
 };
-
 
 
 module.exports = { getUsers, postUsers };
